@@ -1,0 +1,174 @@
+# ============================================================
+# TP3 - Traitement du Signal (Version TFC)
+# ============================================================
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.io import wavfile
+from scipy import integrate
+from scipy.signal import butter, filtfilt, find_peaks
+import os
+
+Fs = 44100  # Hz
+
+# ================= PATH FIX =================
+def get_file_path(filename):
+    return filename  # FIXED (no __file__)
+
+# ============================================================
+# FOURIER
+# ============================================================
+
+def fourier_continue_vectorise(x, t, f_values):
+    exp_matrix = np.exp(-1j * 2 * np.pi * np.outer(f_values, t))
+    dt = t[1] - t[0]
+    return dt * np.dot(exp_matrix, x)
+
+# ============================================================
+# GENERATE AUDIO
+# ============================================================
+
+def generate_test_audio(filename='audio_sample.wav', fs=44100, duration=2.0):
+    t = np.linspace(0, duration, int(fs*duration), endpoint=False)
+
+    x = (
+        0.5 * np.sin(2*np.pi*440*t) +
+        0.3 * np.sin(2*np.pi*523*t) +
+        0.05 * np.random.randn(len(t))
+    )
+
+    x = x / np.max(np.abs(x)) * 0.9
+    x_int16 = (x * 32767).astype(np.int16)
+
+    wavfile.write(filename, fs, x_int16)
+    print("Audio generated")
+
+    return x, t
+
+# ============================================================
+# PARTIE 1
+# ============================================================
+
+def partie1_chargement():
+    print("\n=== PARTIE 1 ===")
+
+    try:
+        Fs, data = wavfile.read("audio_sample.wav")
+        print("Audio loaded")
+    except:
+        print("Generating audio...")
+        data, _ = generate_test_audio()
+        Fs = 44100
+
+    if data.dtype == np.int16:
+        data = data / 32768.0
+
+    if len(data.shape) == 2:
+        data = np.mean(data, axis=1)
+
+    print(f"Duration = {len(data)/Fs:.2f} s")
+
+    t = np.arange(len(data)) / Fs
+
+    # REDUCE SIZE (important)
+    data = data[:20000]
+    t = t[:20000]
+
+    plt.figure()
+    plt.plot(t[:2000], data[:2000])
+    plt.title("Waveform")
+    plt.grid()
+    plt.savefig("waveform.png")
+    plt.show()
+
+    rms = np.sqrt(np.mean(data**2))
+    print("RMS =", rms)
+
+    return data, Fs, t
+
+# ============================================================
+# PARTIE 2
+# ============================================================
+
+def partie2_spectre(data, Fs, t):
+    print("\n=== PARTIE 2 ===")
+
+    f_values = np.linspace(0, Fs/2, 500)  # reduced
+
+    X = fourier_continue_vectorise(data, t, f_values)
+    X_mag = np.abs(X)
+
+    plt.figure()
+    plt.plot(f_values, X_mag)
+    plt.title("Spectrum")
+    plt.xlim(0, 5000)
+    plt.grid()
+    plt.savefig("spectrum.png")
+    plt.show()
+
+    peaks, _ = find_peaks(X_mag, height=0.1*np.max(X_mag))
+    print("Dominant frequencies:", f_values[peaks[:5]])
+
+# ============================================================
+# PARTIE 3
+# ============================================================
+
+def partie3_filtrage(Fs):
+    print("\n=== PARTIE 3 ===")
+
+    fc = 1000
+
+    t = np.linspace(0, 1, Fs, endpoint=False)
+    signal = 0.7*np.sin(2*np.pi*440*t) + 0.3*np.sin(2*np.pi*5000*t)
+
+    b, a = butter(4, fc/(Fs/2), btype='low')
+    filtered = filtfilt(b, a, signal)
+
+    plt.figure()
+    plt.plot(t[:500], signal[:500], label="Noisy")
+    plt.plot(t[:500], filtered[:500], label="Filtered")
+    plt.legend()
+    plt.grid()
+    plt.savefig("filter.png")
+    plt.show()
+
+    print("Filtering done")
+
+# ============================================================
+# PARTIE 4
+# ============================================================
+
+def partie4_features(data, Fs):
+    print("\n=== PARTIE 4 ===")
+
+    x = data[:20000]
+    t = np.linspace(0, 1, len(x), endpoint=False)
+
+    f = np.linspace(0, Fs/2, 300)
+    X = fourier_continue_vectorise(x, t, f)
+    X_mag = np.abs(X)
+
+    centroid = np.sum(f*X_mag) / np.sum(X_mag)
+    bandwidth = np.sqrt(np.sum(((f-centroid)**2)*X_mag)/np.sum(X_mag))
+    rms = np.sqrt(np.mean(x**2))
+
+    print("Centroid:", centroid)
+    print("Bandwidth:", bandwidth)
+    print("RMS:", rms)
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+    print("START TP3")
+
+    data, Fs, t = partie1_chargement()
+    partie2_spectre(data, Fs, t)
+    partie3_filtrage(Fs)
+    partie4_features(data, Fs)
+
+    print("FINISHED")
+
+if __name__ == "__main__":
+    main() 
